@@ -1,43 +1,40 @@
-import Database from "better-sqlite3";
-import path from "path";
+import { createClient, type Client } from "@libsql/client";
 
-// The database is just a file in the project folder
-const DB_PATH = path.join(process.cwd(), "nyt-caps.db");
+// Connect to Turso (cloud-hosted SQLite)
+// The URL and token come from environment variables set in .env.local
+// (and later in Vercel's dashboard for the deployed version)
+//
+// Both the client and the table are created on first use (not at import time)
+// so this file works both in Next.js and in standalone scripts that load
+// env vars with dotenv.
+let db: Client | null = null;
+let initialized = false;
 
-// Keep one connection open (instead of opening a new one every time)
-let db: Database.Database | null = null;
-
-function getDb(): Database.Database {
+function getDb(): Client {
   if (!db) {
-    db = new Database(DB_PATH);
-
-    // WAL mode = better performance for reading while writing
-    db.pragma("journal_mode = WAL");
-
-    // Create the headlines table if it doesn't exist yet.
-    // Think of this as defining the columns of a spreadsheet:
-    //   - id: auto-generated unique number for each row
-    //   - headline: the actual headline text
-    //   - url: link to the NYT article
-    //   - published_at: when the article was published
-    //   - section: which NYT section (Politics, World, etc.)
-    //   - source: how we found it ("rss" or "archive")
-    //   - detected_at: when our app first spotted it
-    //   - UNIQUE constraint: prevents duplicate entries
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS headlines (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        headline TEXT NOT NULL,
-        url TEXT,
-        published_at TEXT NOT NULL,
-        section TEXT,
-        source TEXT DEFAULT 'rss',
-        detected_at TEXT DEFAULT (datetime('now')),
-        UNIQUE(headline)
-      );
-    `);
+    db = createClient({
+      url: process.env.TURSO_DATABASE_URL!,
+      authToken: process.env.TURSO_AUTH_TOKEN,
+    });
   }
   return db;
+}
+
+async function ensureTable() {
+  if (initialized) return;
+  await getDb().execute(`
+    CREATE TABLE IF NOT EXISTS headlines (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      headline TEXT NOT NULL,
+      url TEXT,
+      published_at TEXT NOT NULL,
+      section TEXT,
+      source TEXT DEFAULT 'rss',
+      detected_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(headline)
+    );
+  `);
+  initialized = true;
 }
 
 // --- Types ---
@@ -53,47 +50,48 @@ export interface Headline {
 }
 
 // --- Functions that other files can use ---
+// (Same functions as before, but now async — they talk to a remote database
+//  over the internet instead of reading a file on your computer)
 
 /**
  * Save a headline to the database.
  * Returns true if it was new, false if it was a duplicate (already existed).
  */
-export function insertHeadline(
+export async function insertHeadline(
   headline: string,
   url: string | null,
   publishedAt: string,
   section: string | null,
   source: string = "rss"
-): boolean {
-  const db = getDb();
-  // INSERT OR IGNORE = if this headline already exists, just skip it
-  const stmt = db.prepare(`
-    INSERT OR IGNORE INTO headlines (headline, url, published_at, section, source)
-    VALUES (?, ?, ?, ?, ?)
-  `);
-  const result = stmt.run(headline, url, publishedAt, section, source);
-  return result.changes > 0;
+): Promise<boolean> {
+  await ensureTable();
+  const result = await getDb().execute({
+    sql: `INSERT OR IGNORE INTO headlines (headline, url, published_at, section, source)
+          VALUES (?, ?, ?, ?, ?)`,
+    args: [headline, url, publishedAt, section, source],
+  });
+  return result.rowsAffected > 0;
 }
 
 /**
  * Get all headlines, newest first.
  */
-export function getAllHeadlines(limit: number = 500): Headline[] {
-  const db = getDb();
-  const stmt = db.prepare(`
-    SELECT * FROM headlines
-    ORDER BY published_at DESC
-    LIMIT ?
-  `);
-  return stmt.all(limit) as Headline[];
+export async function getAllHeadlines(
+  limit: number = 500
+): Promise<Headline[]> {
+  await ensureTable();
+  const result = await getDb().execute({
+    sql: `SELECT * FROM headlines ORDER BY published_at DESC LIMIT ?`,
+    args: [limit],
+  });
+  return result.rows as unknown as Headline[];
 }
 
 /**
  * Get the total number of headlines in the database.
  */
-export function getHeadlineCount(): number {
-  const db = getDb();
-  const stmt = db.prepare("SELECT COUNT(*) as count FROM headlines");
-  const row = stmt.get() as { count: number };
-  return row.count;
+export async function getHeadlineCount(): Promise<number> {
+  await ensureTable();
+  const result = await getDb().execute("SELECT COUNT(*) as count FROM headlines");
+  return result.rows[0].count as number;
 }

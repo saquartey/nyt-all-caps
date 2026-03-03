@@ -12,6 +12,8 @@
  *   npx tsx scripts/seed-historical.ts
  */
 
+import dotenv from "dotenv";
+dotenv.config({ path: ".env.local" });
 import { insertHeadline } from "../lib/db";
 import historicalData from "../data/historical-headlines.json";
 
@@ -22,33 +24,37 @@ interface HistoricalHeadline {
   notes: string;
 }
 
-const headlines = historicalData as HistoricalHeadline[];
+async function main() {
+  const headlines = historicalData as HistoricalHeadline[];
 
-let inserted = 0;
-let skipped = 0;
+  let inserted = 0;
+  let skipped = 0;
 
-console.log(`\n📰 NYT ALL CAPS — Historical Seed`);
-console.log(`   Loading ${headlines.length} confirmed headlines...\n`);
+  console.log(`\n📰 NYT ALL CAPS — Historical Seed`);
+  console.log(`   Loading ${headlines.length} confirmed headlines...\n`);
 
-for (const item of headlines) {
-  const wasInserted = insertHeadline(
-    item.headline,
-    null, // No article URLs for historical data
-    new Date(item.date).toISOString(),
-    null, // No section info
-    item.source
-  );
+  for (const item of headlines) {
+    const wasInserted = await insertHeadline(
+      item.headline,
+      null, // No article URLs for historical data
+      new Date(item.date).toISOString(),
+      null, // No section info
+      item.source
+    );
 
-  if (wasInserted) {
-    inserted++;
-    console.log(`   ✅ ${item.date} — "${item.headline}"`);
-  } else {
-    skipped++;
-    console.log(`   ⏭️  ${item.date} — "${item.headline}" (already in database)`);
+    if (wasInserted) {
+      inserted++;
+      console.log(`   ✅ ${item.date} — "${item.headline}"`);
+    } else {
+      skipped++;
+      console.log(`   ⏭️  ${item.date} — "${item.headline}" (already in database)`);
+    }
   }
+
+  console.log(`\n✅ Seed complete!`);
+  console.log(`   Added: ${inserted} new headlines`);
+  console.log(`   Skipped: ${skipped} duplicates`);
+  console.log(`   Total in file: ${headlines.length}\n`);
 }
 
-console.log(`\n✅ Seed complete!`);
-console.log(`   Added: ${inserted} new headlines`);
-console.log(`   Skipped: ${skipped} duplicates`);
-console.log(`   Total in file: ${headlines.length}\n`);
+main().catch(console.error);

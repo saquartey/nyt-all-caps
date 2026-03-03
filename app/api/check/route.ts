@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { checkHomepageBanner, fetchRssHeadlines } from "@/lib/nyt";
 import { insertHeadline, getHeadlineCount } from "@/lib/db";
 
@@ -17,8 +17,22 @@ export const dynamic = "force-dynamic";
  *    — We verify by checking the text itself, not just the display mode
  * 3. If it IS all caps, tries to match it with an RSS feed article to get the URL
  * 4. Saves it to the database (skips duplicates)
+ *
+ * Security: When CRON_SECRET is set, requests must include it as a bearer token
+ * OR come from the same origin (the dashboard's "Check" button). This prevents
+ * random people from spamming the endpoint on the deployed site.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+  // If a CRON_SECRET is configured, verify the request is authorized
+  const cronSecret = process.env.CRON_SECRET;
+  if (cronSecret) {
+    const authHeader = request.headers.get("authorization");
+    const isVercelCron = authHeader === `Bearer ${cronSecret}`;
+    const isFromDashboard = request.headers.get("referer")?.includes(request.headers.get("host") || "");
+    if (!isVercelCron && !isFromDashboard) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+  }
   try {
     // Check the homepage for an active banner
     const banner = await checkHomepageBanner();
@@ -59,7 +73,7 @@ export async function GET() {
         // RSS fetch failed — that's OK, we still have the headline
       }
 
-      const wasInserted = insertHeadline(
+      const wasInserted = await insertHeadline(
         banner.headline,
         articleUrl,
         new Date().toISOString(),
@@ -73,7 +87,7 @@ export async function GET() {
       }
     }
 
-    const totalCount = getHeadlineCount();
+    const totalCount = await getHeadlineCount();
 
     return NextResponse.json({
       success: true,

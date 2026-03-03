@@ -4,9 +4,9 @@ import { HeadlineList } from "@/components/headline-list";
 // Re-check the data every 60 seconds so the page stays fresh
 export const revalidate = 60;
 
-export default function Home() {
-  const headlines = getAllHeadlines(500);
-  const count = getHeadlineCount();
+export default async function Home() {
+  const headlines = await getAllHeadlines(500);
+  const count = await getHeadlineCount();
 
   return (
     <main className="max-w-3xl mx-auto px-4 py-12">
