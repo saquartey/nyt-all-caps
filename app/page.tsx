@@ -21,8 +21,8 @@ export default async function Home() {
         </p>
       </header>
 
-      {/* The main content — headline list with check button */}
-      <HeadlineList initialHeadlines={headlines} initialCount={count} />
+      {/* The main content — headline list */}
+      <HeadlineList headlines={headlines} count={count} />
 
       {/* Footer */}
       <footer className="mt-16 pt-8 border-t border-gray-200 text-sm text-gray-400">
