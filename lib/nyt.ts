@@ -1,4 +1,5 @@
 import { XMLParser } from "fast-xml-parser";
+import { isAllCaps } from "./detect";
 
 // --- Types ---
 
@@ -10,9 +11,11 @@ export interface RawHeadline {
 }
 
 export interface BannerResult {
-  isActive: boolean;
+  hasBanner: boolean; // Is there any banner at all? (LARGE, MEGA, etc.)
+  isAllCaps: boolean; // Is the banner text actually ALL CAPS?
   headline: string | null;
-  bannerDisplay: string;
+  bannerDisplay: string; // The raw value: "NONE", "LARGE", "MEGA", etc.
+  bannerDeck: string | null; // Secondary text (subtitle) under the banner
 }
 
 // --- Homepage Banner Scraper (the main detection method) ---
@@ -22,15 +25,17 @@ const NYT_HOMEPAGE_URL = "https://www.nytimes.com/";
 /**
  * Scrape the NYT homepage to check if there's an ALL CAPS banner headline.
  *
- * Here's the key insight we discovered: the NYT doesn't store headlines
- * in ALL CAPS in their database. The all-caps display is a CSS styling
- * choice controlled by a field called "bannerDisplay" in the page data.
+ * What we learned: the NYT has multiple banner styles:
+ *   - "NONE"  = no banner at all (normal homepage)
+ *   - "LARGE" = big centered headline, but normal title case (NOT all caps)
+ *   - "MEGA"  = the full-width all-caps treatment for huge breaking news
  *
- * When bannerDisplay is "NONE" — normal homepage, no all-caps banner.
- * When bannerDisplay is "LARGE" (or other non-NONE values) — there's
- * a big all-caps banner headline for breaking news.
+ * The ALL CAPS effect isn't CSS — the editors actually type the headline
+ * in uppercase when they want the mega treatment. So we check the text itself
+ * using isAllCaps() rather than relying only on the bannerDisplay value.
  *
- * This function scrapes the homepage HTML and extracts that data.
+ * We also extract bannerDeck (the subtitle text under the main banner),
+ * which is also typed in ALL CAPS during mega events.
  */
 export async function checkHomepageBanner(): Promise<BannerResult> {
   const response = await fetch(NYT_HOMEPAGE_URL, {
@@ -43,8 +48,7 @@ export async function checkHomepageBanner(): Promise<BannerResult> {
   const html = await response.text();
 
   // The NYT embeds page data as escaped JSON in the HTML.
-  // We look for the bannerDisplay field that's NOT "NONE" —
-  // that tells us there's an active all-caps banner.
+  // We extract bannerDisplay, banner (headline text), and bannerDeck (subtitle).
 
   // Find all bannerDisplay values and their associated banner text
   const bannerPattern =
@@ -56,10 +60,13 @@ export async function checkHomepageBanner(): Promise<BannerResult> {
     const bannerText = match[2];
 
     if (display !== "NONE" && bannerText) {
+      const deck = extractBannerDeck(html);
       return {
-        isActive: true,
+        hasBanner: true,
+        isAllCaps: isAllCaps(bannerText),
         headline: bannerText,
         bannerDisplay: display,
+        bannerDeck: deck,
       };
     }
   }
@@ -73,19 +80,36 @@ export async function checkHomepageBanner(): Promise<BannerResult> {
     const display = match[2];
 
     if (display !== "NONE" && bannerText) {
+      const deck = extractBannerDeck(html);
       return {
-        isActive: true,
+        hasBanner: true,
+        isAllCaps: isAllCaps(bannerText),
         headline: bannerText,
         bannerDisplay: display,
+        bannerDeck: deck,
       };
     }
   }
 
   return {
-    isActive: false,
+    hasBanner: false,
+    isAllCaps: false,
     headline: null,
     bannerDisplay: "NONE",
+    bannerDeck: null,
   };
+}
+
+/**
+ * Extract the bannerDeck (subtitle) from the page HTML.
+ * During MEGA events, this contains a secondary ALL CAPS line like
+ * "VICTORY CHANGES NATION'S SENSE OF ITSELF"
+ */
+function extractBannerDeck(html: string): string | null {
+  const deckPattern =
+    /bannerDeck[\\]*":[\\]*"([^"\\]+)[\\]*"/g;
+  const match = deckPattern.exec(html);
+  return match ? match[1] : null;
 }
 
 // --- RSS Feed (for getting article URLs and metadata) ---

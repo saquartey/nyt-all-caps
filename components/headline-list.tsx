@@ -37,19 +37,24 @@ export function HeadlineList({ initialHeadlines, initialCount }: Props) {
         setHeadlines(pageData.headlines);
         setCount(pageData.count);
 
-        // Update the current banner status
-        setCurrentBanner(data.bannerActive ? data.currentBanner : null);
+        // Update the current banner status — only show if ALL CAPS
+        setCurrentBanner(data.isAllCaps ? data.currentBanner : null);
 
         if (data.newAllCaps > 0) {
           setLastCheck(
             `NEW ALL CAPS HEADLINE DETECTED: "${data.newHeadlines[0]}"`
           );
-        } else if (data.bannerActive) {
+        } else if (data.isAllCaps) {
           setLastCheck(
-            `Active banner found: "${data.currentBanner}" (already tracked)`
+            `Active ALL CAPS banner: "${data.currentBanner}" (already tracked)`
+          );
+        } else if (data.hasBanner) {
+          // There's a banner, but it's not ALL CAPS (e.g. a "LARGE" banner)
+          setLastCheck(
+            `NYT has a large banner right now ("${data.currentBanner}") but it's not ALL CAPS — it's a "${data.bannerDisplay}" style banner.`
           );
         } else {
-          setLastCheck("No all-caps banner on the NYT homepage right now.");
+          setLastCheck("No banner on the NYT homepage right now.");
         }
       } else {
         setLastCheck(`Error: ${data.error}`);
@@ -63,11 +68,11 @@ export function HeadlineList({ initialHeadlines, initialCount }: Props) {
 
   return (
     <div>
-      {/* Live banner alert */}
+      {/* Live ALL CAPS banner alert */}
       {currentBanner && (
         <div className="mb-8 p-6 bg-black text-white rounded-lg">
           <p className="text-xs uppercase tracking-widest text-gray-400 mb-2">
-            Live on NYT Homepage
+            Live ALL CAPS on NYT Homepage
           </p>
           <p className="text-2xl font-black tracking-wide">{currentBanner}</p>
         </div>
@@ -103,7 +108,7 @@ export function HeadlineList({ initialHeadlines, initialCount }: Props) {
           <p className="text-3xl font-black mb-4">NO ALL CAPS YET</p>
           <p className="text-sm max-w-md mx-auto">
             Click &quot;Check for new headlines&quot; to scan the NYT
-            homepage. The NYT only uses all-caps banners for major breaking
+            homepage. The NYT only uses ALL CAPS banners for major breaking
             news, so it may be empty for now.
           </p>
         </div>

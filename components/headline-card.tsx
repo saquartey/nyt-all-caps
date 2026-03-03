@@ -33,6 +33,16 @@ export function HeadlineCard({ headline }: { headline: Headline }) {
             {headline.section}
           </span>
         )}
+        {headline.source === "twitter-archive" && (
+          <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-xs">
+            from @NYTIMESALLCAPS
+          </span>
+        )}
+        {headline.source === "wayback-verified" && (
+          <span className="bg-amber-50 text-amber-600 px-2 py-0.5 rounded text-xs">
+            Wayback Machine
+          </span>
+        )}
       </div>
     </article>
   );

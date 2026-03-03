@@ -12,10 +12,11 @@ export const dynamic = "force-dynamic";
  *
  * How it works:
  * 1. Scrapes the NYT homepage and looks for "bannerDisplay" in the page data
- * 2. If bannerDisplay is not "NONE", there's an active all-caps banner
- * 3. Grabs the banner headline text
- * 4. Tries to match it with an RSS feed article to get the URL
- * 5. Saves it to the database (skips duplicates)
+ * 2. Checks if the banner text is actually ALL CAPS (not just a large banner)
+ *    — "LARGE" banners are big but normal case, "MEGA" banners are ALL CAPS
+ *    — We verify by checking the text itself, not just the display mode
+ * 3. If it IS all caps, tries to match it with an RSS feed article to get the URL
+ * 4. Saves it to the database (skips duplicates)
  */
 export async function GET() {
   try {
@@ -25,7 +26,8 @@ export async function GET() {
     let newCount = 0;
     const newHeadlines: string[] = [];
 
-    if (banner.isActive && banner.headline) {
+    // Only save if the banner text is genuinely ALL CAPS
+    if (banner.isAllCaps && banner.headline) {
       // Try to find the matching article URL from the RSS feed
       let articleUrl: string | null = null;
       let articleSection: string | null = null;
@@ -75,9 +77,13 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      bannerActive: banner.isActive,
+      // Banner info (is there ANY banner on the homepage?)
+      hasBanner: banner.hasBanner,
       bannerDisplay: banner.bannerDisplay,
       currentBanner: banner.headline,
+      bannerDeck: banner.bannerDeck,
+      // ALL CAPS info (is it actually ALL CAPS?)
+      isAllCaps: banner.isAllCaps,
       newAllCaps: newCount,
       newHeadlines,
       totalInDatabase: totalCount,
