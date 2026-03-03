@@ -52,7 +52,7 @@ async function backfill(startYear: number, endYear: number) {
           if (isAllCaps(item.headline)) {
             monthFound++;
             totalFound++;
-            const wasInserted = insertHeadline(
+            const wasInserted = await insertHeadline(
               item.headline,
               item.url,
               item.publishedAt,
