@@ -1,8 +1,9 @@
 import { getAllHeadlines, getHeadlineCount } from "@/lib/db";
 import { HeadlineList } from "@/components/headline-list";
 
-// Re-check the data every 60 seconds so the page stays fresh
-export const revalidate = 60;
+// Always fetch fresh data (don't try to prerender at build time,
+// since the database is remote and not available during builds)
+export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const headlines = await getAllHeadlines(500);
